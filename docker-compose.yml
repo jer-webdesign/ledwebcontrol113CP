@@ -1,0 +1,33 @@
+services:
+  # --------------------
+  # 1. Backend Service (Python Flask)
+  # --------------------
+  backend:
+    container_name: ledweb_backend
+    build:
+      context: ./backend      # Look in the ./backend folder for the source/Dockerfile
+    
+    ports:
+      - "5000:5000"           # Map host port 5000 to container port 5000 (Flask's port)
+    
+    # Volume mount for development: keeps code changes instantly reflected in the container
+    volumes:
+      - ./backend:/app
+    
+    environment:
+      - FLASK_ENV=development # Set to development for typical local use
+
+  # --------------------
+  # 2. Frontend Service (Nginx serving static HTML/JS/CSS)
+  # --------------------
+  frontend:
+    container_name: ledweb_frontend
+    build:
+      context: ./frontend     # Look in the ./frontend folder for the source/Dockerfile
+    
+    ports:
+      - "80:80"               # Map host port 80 to container port 80 (Nginx's default)
+    
+    # Ensures the backend container starts before the frontend container
+    depends_on:
+      - backend

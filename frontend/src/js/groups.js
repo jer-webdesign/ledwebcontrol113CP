@@ -1,0 +1,684 @@
+// groups.js - Group management functionality
+
+// Render groups for selected zone
+function renderGroupsForZone(hierarchy, zoneId) {
+    const container = document.getElementById('groupsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const zones = _getZones(hierarchy);
+    const zone = zones.find(z => String(z.zone_id) === String(zoneId)) || zones[0];
+    if (!zone) return;
+    
+    const groups = _getGroups(zone) || [];
+
+    groups.forEach(g => {
+        const id = (typeof g.group_id !== 'undefined') ? String(g.group_id) : (g.group_name || '');
+        const name = g.group_name || `Group ${id}`;
+        const btn = document.createElement('button');
+        btn.className = 'group-tab px-4 py-2 rounded-md font-medium';
+        btn.dataset.groupId = id;
+        btn.dataset.zoneId = String(zone.zone_id || '');
+        btn.textContent = name;
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.group-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderDevicesForGroup(hierarchy, btn.dataset.zoneId, btn.dataset.groupId);
+        });
+        container.appendChild(btn);
+    });
+    const first = container.querySelector('.group-tab');
+    if (first) {
+        first.classList.add('active');
+        first.click();
+    } else {
+        const devicesContainer = document.getElementById('devicesContainer');
+        if (devicesContainer) {
+            devicesContainer.innerHTML = '<div class="text-sm text-gray-400">No groups in this zone.</div>';
+        }
+    }
+}
+
+// Load groups for a given zone from backend API
+async function loadGroupsForZone(zoneId) {
+    const hidden = document.getElementById('groupSelect');
+    if (!hidden) return;
+
+    hidden.value = '';
+
+    if (!zoneId) {
+        renderGroupButtons([]);
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`/api/groups?zone_id=${encodeURIComponent(zoneId)}`);
+        const groups = res && (res.groups || res) || [];
+        window.currentGroups = groups;
+
+        renderGroupButtons(groups);
+    } catch (err) {
+        console.error('loadGroupsForZone failed', err);
+        renderGroupButtons([]);
+    }
+}
+
+// Render group buttons for selected zone
+function renderGroupButtons(groups) {
+    const container = document.getElementById('groupButtonsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const hasGroups = Array.isArray(groups) && groups.length > 0;
+    
+    // Show/hide group edit button and devices section based on groups availability
+    const groupEditBtn = document.getElementById('groupEditBtn');
+    const devicesSection = document.getElementById('devicesSection');
+    
+    if (groupEditBtn) {
+        groupEditBtn.style.display = hasGroups ? '' : 'none';
+    }
+    
+    if (devicesSection) {
+        devicesSection.style.display = hasGroups ? '' : 'none';
+    }
+    
+    if (!hasGroups) {
+        return;
+    }
+    
+    // Render group buttons
+    groups.forEach((g) => {
+        const btn = document.createElement('button');
+        btn.className = 'px-4 py-2 rounded-md bg-[#038bbf] hover:bg-[#2696c6] text-white text-sm font-medium border border-[#c3e8f3]';
+        btn.dataset.groupId = String(g.group_id ?? '');
+        btn.textContent = g.group_name || 'Button';
+        btn.addEventListener('click', function() {
+            // Remove active state from all group buttons
+            container.querySelectorAll('button').forEach(b => {
+                b.classList.remove('bg-[#038bbf]', 'hover:bg-[#2696c6]', 'border-[#c3e8f3]', 'active-group-btn');
+                b.classList.add('bg-[#038bbf]', 'hover:bg-[#2696c6]', 'border-[#038bbf]');
+            });
+            btn.classList.remove('bg-[#038bbf]', 'hover:bg-[#2696c6]', 'border-[#038bbf]');
+            btn.classList.add('bg-[#038bbf]', 'hover:bg-[#2696c6]', 'border-[#c3e8f3]', 'active-group-btn');
+            
+            // Update hidden input for compatibility
+            const groupHidden = document.getElementById('groupSelect');
+            if (groupHidden) {
+                groupHidden.value = btn.dataset.groupId;
+                groupHidden.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        container.appendChild(btn);
+    });
+
+    // Auto-select first group button
+    const firstBtn = container.querySelector('button');
+    if (firstBtn) {
+        firstBtn.classList.remove('bg-[#038bbf]', 'hover:bg-[#2696c6]', 'border-[#038bbf]');
+        firstBtn.classList.add('bg-[#038bbf]', 'hover:bg-[#2696c6]', 'border-[#c3e8f3]', 'active-group-btn');
+        firstBtn.click();
+    }
+
+    // No dynamic Edit icon. The static SVG in the HTML will be made clickable below.
+}
+
+// Make renderGroupButtons globally accessible
+window.renderGroupButtons = renderGroupButtons;
+
+// Ensure group buttons are rendered on page load for the default zone
+document.addEventListener('DOMContentLoaded', function() {
+    // Always fetch groups from backend for default zone on load
+    async function fetchHierarchyAndRenderGroups() {
+        try {
+            // Fetch hierarchy from backend API
+            const hierarchy = await apiFetch('/api/hierarchy');
+            if (hierarchy && hierarchy.zones && hierarchy.zones.length > 0) {
+                window.currentHierarchy = hierarchy;
+                const defaultZone = hierarchy.zones[0];
+                if (defaultZone) {
+                    // Set zoneSelect value to first zone id
+                    const zoneSelect = document.getElementById('zoneSelect');
+                    if (zoneSelect) {
+                        zoneSelect.value = defaultZone.zone_id;
+                    }
+                    // Try to fetch groups for default zone
+                    await loadGroupsForZone(defaultZone.zone_id);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch hierarchy from backend', err);
+        }
+    }
+    fetchHierarchyAndRenderGroups();
+    // Make the static Edit icon/button next to 'Groups' clickable
+    const groupEditBtn = document.getElementById('groupEditBtn');
+    const groupEditSvg = document.getElementById('groupEditIcon');
+    const editElement = groupEditBtn || groupEditSvg;
+    if (editElement) {
+        // if it's an <img> or button, ensure pointer cursor
+        editElement.style.cursor = 'pointer';
+        if (editElement.title === '') editElement.title = 'Edit Selected Group';
+        editElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const container = document.getElementById('groupButtonsContainer');
+            const activeBtn = container && container.querySelector('button.active-group-btn');
+            if (!activeBtn) {
+                showAlertModal('Please select a group first.', 'Notice', { size: 'sm' });
+                return;
+            }
+            // Find the group data from the current group list
+            let groups = window.currentGroups;
+            if (!groups) {
+                // fallback: try to get from the default zone
+                if (window.currentHierarchy && window.currentHierarchy.zones && window.currentHierarchy.zones.length > 0) {
+                    const defaultZone = window.currentHierarchy.zones[0];
+                    groups = defaultZone.groups;
+                }
+            }
+            if (!groups) return;
+            const groupId = activeBtn.dataset.groupId;
+            const group = groups.find(g => String(g.group_id) === String(groupId));
+            if (group) {
+                const zoneSelect = document.getElementById('zoneSelect');
+                const zoneId = zoneSelect ? zoneSelect.value : null;
+                const zone = zoneId && window.currentHierarchy && window.currentHierarchy.zones 
+                    ? window.currentHierarchy.zones.find(z => String(z.zone_id) === String(zoneId))
+                    : null;
+                if (zone) {
+                    openEditGroupModal(zone, group);
+                }
+            }
+        });
+    }
+});
+
+// Update group UI state
+function updateGroupUIState(hasGroups) {
+    // Only update Add Devices button state (needs both zone and group)
+    if (typeof updateAddDevicesButtonState === 'function') {
+        updateAddDevicesButtonState();
+    }
+}
+
+function wireGroupDropdown() {
+    // No longer needed - using buttons instead
+    // Keep function for compatibility but make it empty
+}
+
+// Add New Group Modal
+function openAddGroupModal() {
+    const zoneSelect = document.getElementById('zoneSelect');
+    if (!zoneSelect || !zoneSelect.value) {
+        // showAlertModal('Select a zone first to add a group.', 'Notice', { size: 'sm' });
+        return;
+    }
+    
+    const zid = zoneSelect.value;
+    const zone = (window.currentHierarchy && window.currentHierarchy.zones || []).find(z => String(z.zone_id) === String(zid));
+    if (!zone) {
+        showAlertModal('Selected zone not found.', 'Error', { size: 'sm' });
+        return;
+    }
+
+    const html = `
+        <h2 class="text-lg text-center font-semibold mb-3 py-6">Add New Group</h2>
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-[#f3f4f1] mb-1">Name</label>
+            <input type="text" id="groupNameInput" class="w-full bg-[#2b3236] border border-[#6c757d] rounded-lg px-3 py-2 focus:outline-none focus:border-white" placeholder="Enter group name" autocomplete="off" maxlength="32">
+            <div id="groupNameCharLimit" class="text-sm mt-1 hidden" style="color: #fa7a7a;">You have exceeded the maximum 32 characters.</div>
+        </div>
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-[#f3f4f1] mb-1">Description</label>
+            <textarea id="groupDescInput" rows="3" class="w-full bg-[#2b3236] border border-[#6c757d] rounded-lg px-3 py-2 focus:outline-none focus:border-white resize-vertical" placeholder="Enter group description" autocomplete="off" maxlength="255"></textarea>
+            <div id="groupDescCharLimit" class="text-sm mt-1 hidden" style="color: #fa7a7a;">You have exceeded the maximum 255 characters.</div>
+        </div>
+        <div class="mb-6">        
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="groupCancel" class="px-4 py-2 rounded-lg bg-[#ed0973] hover:bg-[#b70558] text-[#f3f4f1] font-medium">Cancel</button>
+                <button type="button" id="groupSave" class="px-6 py-2 rounded-lg bg-[#008bbf] hover:bg-[#006b94] text-[#f3f4f1] font-medium">Save</button>
+            </div>   
+        </div>           
+    `;
+    const m = createModal(html);
+    
+    m.dlg.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
+    setTimeout(() => {
+        const nameInput = m.dlg.querySelector('#groupNameInput');
+        if (nameInput) {
+            nameInput.focus();
+        }
+    }, 100);
+    
+    const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Real-time validation on name input
+    const nameInput = m.dlg.querySelector('#groupNameInput');
+    const charLimitMessage = m.dlg.querySelector('#groupNameCharLimit');
+    const descInput = m.dlg.querySelector('#groupDescInput');
+    const descCharLimitMessage = m.dlg.querySelector('#groupDescCharLimit');
+    
+    if (nameInput && charLimitMessage) {
+        nameInput.addEventListener('input', () => {
+            // Check character limit (32 max - show warning at exactly 32)
+            if (nameInput.value.length >= 32) {
+                charLimitMessage.classList.remove('hidden');
+                nameInput.classList.add('border-[#ff7a7a]');
+            } else {
+                charLimitMessage.classList.add('hidden');
+                nameInput.classList.remove('border-[#ff7a7a]');
+            }
+        });
+    }
+    
+    // Real-time validation on description input
+    if (descInput && descCharLimitMessage) {
+        descInput.addEventListener('input', () => {
+            // Check character limit (255 max - show warning at exactly 255)
+            if (descInput.value.length >= 255) {
+                descCharLimitMessage.classList.remove('hidden');
+                descInput.classList.add('border-[#ff7a7a]');
+            } else {
+                descCharLimitMessage.classList.add('hidden');
+                descInput.classList.remove('border-[#ff7a7a]');
+            }
+        });
+    }
+    
+    m.dlg.querySelector('#groupCancel').addEventListener('click', () => {
+        m.overlay.remove();
+        document.removeEventListener('keydown', handleKeyDown);
+    });
+
+    m.dlg.querySelector('#groupSave').addEventListener('click', async () => {
+        const nameInput = m.dlg.querySelector('#groupNameInput');
+        const descInput = m.dlg.querySelector('#groupDescInput');
+        
+        const name = nameInput.value.trim();
+        const desc = descInput.value.trim();
+
+        if (!name) {
+            showAlertModal('Group name is required.', 'Validation Error', { size: 'sm' });
+            nameInput.focus();
+            return;
+        }
+
+        const saveBtn = m.dlg.querySelector('#groupSave');
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Adding...';
+
+        try {
+            // Generate new group ID
+            const existingGroups = zone.groups || [];
+            const maxId = existingGroups.reduce((max, g) => Math.max(max, parseInt(g.group_id) || 0), 0);
+            const newGroupId = maxId + 1;
+
+            // Create new group object
+            const newGroup = {
+                group_id: newGroupId,
+                group_name: name,
+                group_description: desc,
+                location: []
+            };
+
+            // Add to zone
+            if (!zone.groups) {
+                zone.groups = [];
+            }
+            zone.groups.push(newGroup);
+
+            // Clean up hierarchy structure before saving
+            if (typeof cleanupHierarchy === 'function') {
+                cleanupHierarchy(window.currentHierarchy);
+            }
+
+            // Save to API
+            await apiFetch('/api/hierarchy', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(window.currentHierarchy)
+            });
+
+            // Close modal first
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+
+            // Small delay to ensure modal is fully removed
+            setTimeout(() => {
+                // Update UI
+                renderGroupsForZone(window.currentHierarchy, String(zid));
+                renderGroupButtons(zone.groups || []);
+                wireGroupDropdown();
+                
+                // Update group UI state
+                updateGroupUIState((zone.groups || []).length > 0);
+
+                // Select the newly created group
+                const groupSelect = document.getElementById('groupSelect');
+                
+                if (groupSelect) {
+                    groupSelect.value = String(newGroupId);
+                    groupSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                // Highlight the new button
+                const container = document.getElementById('groupButtonsContainer');
+                if (container) {
+                    const newBtn = container.querySelector(`button[data-group-id="${newGroupId}"]`);
+                    if (newBtn) {
+                        newBtn.click();
+                    }
+                }
+
+                // Clear devices grid
+                if (typeof renderDevicesGrid === 'function') {
+                    const container = document.getElementById('devicesContainer');
+                    if (container) container.innerHTML = '';
+                }
+
+                // showAlertModal('Group added successfully!', 'Success', { size: 'sm' });
+
+                // Auto-reload after creating a new group so UI and backend state are synchronized.
+                // Small delay to allow the UI updates above to complete.
+                setTimeout(() => {
+                    try {
+                        window.location.reload();
+                    } catch (e) {
+                        console.debug('Auto-reload failed', e);
+                    }
+                }, 300);
+            }, 50);
+            
+        } catch (err) {
+            console.error('Failed to add group', err);
+            showAlertModal('Failed to add group. See console for details.', 'Error', { size: 'sm' });
+            
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalText;
+        }
+    });
+}
+
+// Delete Group Confirmation Modal
+function openDeleteGroupModal(zone, group) {
+    const html = `
+        <h2 class="text-lg font-semibold mb-3 text-red-600">Delete Group</h2>
+        <div class="mb-4">
+            <p class="text-sm text-gray-700 mb-2">Are you sure you want to delete this group?</p>
+            <div class="bg-gray-100 p-3 rounded border border-gray-300">
+                <div class="font-medium">${escapeHtml(group.group_name || '')}</div>
+                ${group.group_description ? `<div class="text-sm text-gray-600 mt-1">${escapeHtml(group.group_description)}</div>` : ''}
+            </div>
+            <p class="text-sm text-red-600 mt-3 font-medium">Warning: This will also delete all locations and devices within this group.</p>
+        </div>
+        <div class="flex justify-end space-x-2">
+            <button type="button" id="deleteCancel" class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium">Cancel</button>
+            <button type="button" id="deleteConfirm" class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium">Delete Group</button>
+        </div>
+    `;
+    const m = createModal(html);
+    
+    m.dlg.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
+    const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    
+    m.dlg.querySelector('#deleteCancel').addEventListener('click', () => {
+        m.overlay.remove();
+        document.removeEventListener('keydown', handleKeyDown);
+    });
+
+    m.dlg.querySelector('#deleteConfirm').addEventListener('click', async () => {
+        const deleteBtn = m.dlg.querySelector('#deleteConfirm');
+        const originalText = deleteBtn.textContent;
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Deleting...';
+
+        const zones = window.currentHierarchy && window.currentHierarchy.zones || [];
+        const z = zones.find(z => String(z.zone_id) === String(zone.zone_id));
+        
+        if (!z) {
+            showAlertModal('Zone not found.', 'Error', { size: 'sm' });
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+            return;
+        }
+        
+        z.groups = (z.groups || []).filter(gr => String(gr.group_id) !== String(group.group_id));
+
+        try {
+            // Clean up hierarchy structure before saving
+            if (typeof cleanupHierarchy === 'function') {
+                cleanupHierarchy(window.currentHierarchy);
+            }
+
+            await apiFetch('/api/hierarchy', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(window.currentHierarchy)
+            });
+
+            renderGroupsForZone(window.currentHierarchy, String(zone.zone_id));
+            renderGroupButtons(window.currentHierarchy.zones ? (z.groups || []) : []);
+            wireGroupDropdown();
+            
+            // Update group UI state
+            updateGroupUIState((z.groups || []).length > 0);
+
+            // Clear selection and update buttons
+            const hidden = document.getElementById('groupSelect');
+            if (hidden) {
+                hidden.value = '';
+                // Trigger change event to update dependent UI (like devices grid)
+                hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+            showAlertModal('Group deleted successfully!', 'Success', { size: 'sm' });
+        } catch (err) {
+            console.error('Failed to delete group', err);
+            showAlertModal('Failed to delete group. See console for details.', 'Error', { size: 'sm' });
+            
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = originalText;
+        }
+    });
+}
+
+// Edit Group Modal (group name is shown as non-editable text)
+function openEditGroupModal(zone, group) {
+    const html = `
+        <h2 class="text-lg text-center font-medium mb-3 py-6">Edit Group</h2>
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-[#f3f4f1] mb-1">Name</label>
+            <input type="text" id="editGroupNameInput" class="w-full bg-[#2b3236] border border-[#6c757d] text-[#c0c5c8] rounded-lg px-1 py-2 focus:outline-none focus:border-white" value="${escapeHtml(group.group_name || '')}" autocomplete="off" maxlength="32">
+            <div id="groupNameCharLimit" class="text-sm mt-1 hidden" style="color: #fa7a7a;">You have exceeded the maximum 32 characters.</div>
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-[#f3f4f1] mb-1">Description</label>
+            <textarea id="editGroupDescInput" rows="3" class="w-full bg-[#2b3236] border border-[#6c757d] text-[#c0c5c8] rounded-lg px-1 py-2 focus:outline-none focus:border-white resize-vertical" autocomplete="off" maxlength="255">${escapeHtml(group.group_description || '')}</textarea>
+            <div id="groupDescCharLimit" class="text-sm mt-1 hidden" style="color: #fa7a7a;">You have exceeded the maximum 255 characters.</div>
+        </div>
+        <div class="flex items-center justify-between mb-4 space-x-2 pb-4">
+            <button type="button" id="editGroupDelete" class="py-2">
+                <img src="assets/icons/trash.svg" class="w-7 h-7 brightness-5 saturate-100" alt="Delete Zone" />
+            </button>  
+            <div class="flex items-center space-x-4">
+                <button type="button" id="editGroupCancel" class="px-4 py-2 rounded-lg bg-[#ed0973] hover:bg-[#b70558] text-[#f3f4f1] font-medium">Cancel</button>
+                <button type="button" id="editGroupSave" class="px-5 py-2 rounded-lg bg-[#008bbf] hover:bg-[#006b94] text-[#f3f4f1] font-medium">Save</button>
+            </div>
+        </div>
+    `;
+    const m = createModal(html);
+    
+    // Override modal styling for dark theme
+    m.dlg.classList.remove('bg-white', 'text-black');
+    m.dlg.classList.add('bg-[#1e1e1e]', 'text-white');
+    
+    m.dlg.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
+    const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Real-time validation on name input
+    const nameInput = m.dlg.querySelector('#editGroupNameInput');
+    const charLimitMessage = m.dlg.querySelector('#groupNameCharLimit');
+    const descInput = m.dlg.querySelector('#editGroupDescInput');
+    const descCharLimitMessage = m.dlg.querySelector('#groupDescCharLimit');
+    
+    if (nameInput && charLimitMessage) {
+        nameInput.addEventListener('input', () => {
+            // Check character limit (32 max - show warning at exactly 32)
+            if (nameInput.value.length >= 32) {
+                charLimitMessage.classList.remove('hidden');
+                nameInput.classList.add('border-[#ff7a7a]');
+            } else {
+                charLimitMessage.classList.add('hidden');
+                nameInput.classList.remove('border-[#ff7a7a]');
+            }
+        });
+    }
+    
+    // Real-time validation on description input
+    if (descInput && descCharLimitMessage) {
+        descInput.addEventListener('input', () => {
+            // Check character limit (255 max - show warning at exactly 255)
+            if (descInput.value.length >= 255) {
+                descCharLimitMessage.classList.remove('hidden');
+                descInput.classList.add('border-[#ff7a7a]');
+            } else {
+                descCharLimitMessage.classList.add('hidden');
+                descInput.classList.remove('border-[#ff7a7a]');
+            }
+        });
+    }
+    
+    // Cancel
+    m.dlg.querySelector('#editGroupCancel').addEventListener('click', () => {
+        m.overlay.remove();
+        document.removeEventListener('keydown', handleKeyDown);
+    });
+    
+    // Save
+    m.dlg.querySelector('#editGroupSave').addEventListener('click', async () => {
+        const descInput = m.dlg.querySelector('#editGroupDescInput');
+        const desc = descInput.value.trim();
+        
+        const saveBtn = m.dlg.querySelector('#editGroupSave');
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            // Update group description
+            group.group_description = desc;
+            
+            // Clean up hierarchy structure before saving
+            if (typeof cleanupHierarchy === 'function') {
+                cleanupHierarchy(window.currentHierarchy);
+            }
+            
+            // Save to API
+            await apiFetch('/api/hierarchy', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(window.currentHierarchy)
+            });
+            
+            m.overlay.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+            showAlertModal('Group updated successfully!', 'Success', { size: 'sm' });
+        } catch (err) {
+            console.error('Failed to update group', err);
+            showAlertModal('Failed to update group. See console for details.', 'Error', { size: 'sm' });
+            
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalText;
+        }
+    });
+    
+    // Delete
+    m.dlg.querySelector('#editGroupDelete').addEventListener('click', () => {
+        m.overlay.remove();
+        document.removeEventListener('keydown', handleKeyDown);
+        openDeleteGroupModal(zone, group);
+    });
+}
+
+// Initialize group-related event handlers
+function initGroupHandlers() {
+    const zoneHidden = document.getElementById('zoneSelect');
+    if (zoneHidden) {
+        zoneHidden.addEventListener('change', (e) => {
+            const zid = zoneHidden.value;
+            if (zid) {
+                loadGroupsForZone(zid);
+            } else {
+                renderGroupButtons([]);
+            }
+        });
+        // Initial load if zone is already selected
+        if (zoneHidden.value) {
+            loadGroupsForZone(zoneHidden.value);
+        }
+    }
+
+    // Global Add New (main page) handler - opens the Add Group modal
+    const addNewGroupBtn = document.getElementById('addNewGroup');
+    if (addNewGroupBtn) {
+        // remove existing listeners by cloning
+        const clone = addNewGroupBtn.cloneNode(true);
+        addNewGroupBtn.parentNode.replaceChild(clone, addNewGroupBtn);
+        clone.addEventListener('click', function () {addNewGroup
+            openAddGroupModal();
+        });
+    }
+
+    wireGroupDropdown();
+
+    // Add right-click context menu for group buttons
+    document.addEventListener('contextmenu', function(e) {
+        const btn = e.target.closest('#groupButtonsContainer button');
+        if (btn && btn.dataset.groupId) {
+            e.preventDefault();
+            
+            const zoneSelect = document.getElementById('zoneSelect');
+            if (!zoneSelect || !zoneSelect.value) return;
+            
+            const zid = zoneSelect.value;
+            const zone = (window.currentHierarchy && window.currentHierarchy.zones || []).find(z => String(z.zone_id) === String(zid));
+            if (!zone) return;
+            
+            const group = (zone.groups || []).find(g => String(g.group_id) === String(btn.dataset.groupId));
+            if (!group) return;
+            
+            openEditGroupModal(zone, group);
+        }
+    });
+}

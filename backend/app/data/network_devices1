@@ -1,0 +1,29 @@
+{
+  "zones": [
+    {
+      "zone_id": 1,
+      "zone_name": "Home1",
+      "zone_description": "",
+      "groups": [
+        {
+          "group_id": 1,
+          "group_name": "Home1",
+          "group_description": "Home1",
+          "location": []
+        }
+      ]
+    },
+    {
+      "zone_id": 2,
+      "zone_name": "Home2",
+      "zone_description": "",
+      "groups": []
+    },
+    {
+      "zone_id": 3,
+      "zone_name": "Home3",
+      "zone_description": "",
+      "groups": []
+    }
+  ]
+}

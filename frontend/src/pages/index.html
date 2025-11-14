@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEDWebControl</title>
+    <!-- Use Tailwind CSS CDN for development -->
+    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+    <!-- Removed client-side tailwind config include; Tailwind config is used at build-time only -->
+    <!-- <script src="../../tailwind-config.js"></script> -->
+    
+    <!-- Use Tailwind CSS build by npm run build-css for production -->
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="icon" type="image/x-png" href="../assets/icons/favLumaXP.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Font: Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Use Poppins site-wide */
+        body { font-family: 'Poppins', 
+                            'Segoe UI', 
+                            Roboto, 
+                            'Helvetica Neue', 
+                            Arial; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        /* Brightness Slider Styling */
+        input[type="range"].slider {
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        input[type="range"].slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #06b6d4;
+            cursor: pointer;
+            border: 2px solid #fff;
+        }
+        input[type="range"].slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #06b6d4;
+            cursor: pointer;
+            border: 2px solid #fff;
+        }
+        input[type="range"].slider::-webkit-slider-track {
+            background: #374151;
+            border-radius: 4px;
+        }
+        input[type="range"].slider::-moz-range-track {
+            background: #374151;
+            border-radius: 4px;
+        }
+
+        /* Selected Device Border */
+        .device-card-selected {
+            border: 2px solid white !important;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Ensure select dropdowns are clickable */
+        select {
+            position: relative;
+            z-index: 9999 !important;
+        }
+        
+        select:focus {
+            z-index: 10000 !important;
+        }
+
+        /* Remove focus ring from all buttons */
+        button:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        
+        /* Prevent Tailwind focus ring */
+        button {
+            --tw-ring-shadow: 0 0 #0000 !important;
+        }
+
+        /* Color wheel styling for modal */
+        .color-wheel {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                red 0deg,
+                yellow 60deg,
+                lime 120deg,
+                cyan 180deg,
+                blue 240deg,
+                magenta 300deg,
+                red 360deg
+            );
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .color-selector {
+            width: 16px;
+            height: 16px;
+            border: 2px solid white;
+            border-radius: 50%;
+            position: absolute;
+            pointer-events: none;
+        }
+        
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
+        }
+
+        /* When no zones exist, hide group/device UI via a body data attribute.
+           This avoids timing issues where JS runs before elements are (re)created. */
+        body[data-has-zones="false"] #groupEditIcon,
+        body[data-has-zones="false"] #devicesSection,
+        body[data-has-zones="false"] #addGroupPlus {
+            display: none !important;
+        }
+        body[data-has-zones="false"] #addGroupWarning {
+            display: inline !important;
+        }
+
+        /* Hide the warning span when hovering over button (tooltip is shown instead) */
+        #addNewGroup:hover + #addGroupWarning {
+            display: none !important;
+        }
+
+        /* Tip bubble styling (matches provided image) */
+        .tip-bubble {
+            display: inline-block;
+            position: relative;
+            background: linear-gradient(180deg, #06b6d4 0%, #0ea5e9 100%);
+            color: #ffffff;
+            padding: 0.5rem 0.9rem;
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(2,6,23,0.45);
+            font-size: 0.95rem;
+            line-height: 1.2;
+            max-width: 340px;
+        }
+
+        .tip-bubble strong {
+            font-weight: 700;
+            margin-right: 0.5rem;
+            color: #ffffff;
+        }
+
+        .tip-bubble .tip-text {
+            color: rgba(235, 245, 250, 0.95); /* slightly muted white */
+            font-weight: 500;
+        }
+
+        /* Left-pointing tail */
+        .tip-bubble::after {
+            content: "";
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 12px solid #0ea5e9;
+        }
+
+        /* When hidden via .hidden class keep it removed from layout */
+        .tip-bubble.hidden { display: none !important; }
+
+        /* Generic data-tip tooltip for elements (appears on hover). */
+        [data-tip] {
+            position: relative;
+            cursor: help;
+        }
+
+        [data-tip]::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: calc(100% + 25px);
+            top: 50%;
+            transform: translateY(-50%);
+            white-space: pre-line;
+            background:#0ea5e9 ; 
+            color: #fff;
+            padding: 0.75rem 0.2rem;
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(2,6,23,0.45);
+            font-size: 0.875rem;
+            line-height: 1.3;
+            z-index: 1000;
+            display: none;
+            max-width: 500px;
+            width: 275px;
+            text-align: center;
+        }
+
+        [data-tip]::before {
+            content: "";
+            position: absolute;
+            right: -25px;
+            /* calc(1% + 12px); */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 12px solid #0ea5e9;
+            z-index: 1001;
+            display: none;
+        }
+
+        [data-tip]:hover::after,
+        [data-tip]:hover::before {
+            display: block;
+       }
+
+    </style>
+</head>
+<body class="bg-luma-black text-white min-h-screen">
+    <!-- Topbar: full width dark bar with logo left, avatar right -->
+    <!-- <div class="w-full" style="background: linear-gradient(to bottom, #1e1e1e 0%, #1e1e1e 70%, #2b2b2b 100%); border-bottom: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 20px rgba(0,0,0,0.5);"> -->
+    <div class="w-full" style="background: linear-gradient(to bottom, #1e1e1e 0%, #1e1e1e 70%, #2b2b2b 100%); border-bottom: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        <div class="flex flex-col sm:flex-row items-center justify-between px-0 py-4 pl-4 sm:pl-6 md:pl-8 lg:pl-10 gap-4 sm:gap-8 md:gap-16" style="--tw-gap: clamp(1rem, 10vw, 80rem); gap: var(--tw-gap);">
+            <div class="flex items-center">
+                <!-- Logo positioned leftmost with 2rem (32px) right margin, responsive -->
+                <img src="assets/images/Luma_XP_Banner_Logo_2024_Colour.png" alt="Luma Logo" class="h-8 w-auto mr-8 sm:mr-12 lg:mr-16 xl:mr-20">
+            </div>
+            <div class="flex items-center pr-8">
+                <!-- <div class="h-10 w-10 rounded-full bg-transparent border border-gray-600 flex items-center justify-center">      -->
+                <div class="flex items-center justify-center">                     
+                    <img src="assets/images/user-circle.svg" class="w-10 h-10 brightness-0 saturate-100 invert-[0.7]" alt="User icon" title="User Profile"/> 
+                </div>
+            </div>
+        </div>
+    </div>    
+
+
+    <!-- Zones select + Edit Zone -->
+    <div class="container-lg mb-4">
+            <!-- Home: centered to match pasted image -->
+        <div class="container mx-auto flex items-center justify-center lg:justify-start mt-10 mb-6 space-x-6">    
+            <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-center">Home</h1>        
+
+                <!-- hidden value kept for compatibility with existing code -->
+                <input type="hidden" id="zoneSelect" value="">
+
+                <!-- custom dropdown -->
+                <div id="zoneDropdown" class="relative w-78">
+                                        <button id="zoneDropdownBtn" type="button"
+                                            class="w-full bg-[#db2a6a] hover:bg-[#c9225e] text-white px-16 py-2 rounded-lg text-base font-medium text-center relative flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                            aria-haspopup="listbox" aria-expanded="false" disabled
+                                            data-tip="Select a zone to view and manage groups and devices.">
+                      <span id="zoneDropdownLabel" class="text-center">+ Create a New Zone</span>
+                      <svg class="w-4 h-4 absolute right-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+                      </svg>                      
+                    </button>
+
+                    <ul id="zoneDropdownList"
+                        class="absolute z-50 mt-1 w-full bg-[#3a3a3a] text-white rounded-lg shadow-lg hidden overflow-hidden"
+                        role="listbox" tabindex="-1">
+                      <!-- JS will inject <li role="option"> items here, text-centered by Tailwind -->
+                    </ul>
+                  </div>
+                <button id="editZoneBtn" class="hover:bg-gray-400 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed" data-tip="Edit or delete the selected zone.">
+                <img src="assets/images/edit.svg" class="w-6 h-6 brightness-0 saturate-100 invert-[1.0]" alt="Edit Home" />
+                </button>
+            </div>
+        </div>
+
+
+        <!-- Groups -->
+    <div class="container-lg mb-6">
+        <div class="container mx-auto flex items-center justify-center lg:justify-start space-x-3">
+                <!-- Groups heading with pencil icon -->
+                <div class="flex items-center gap-2">
+                    <h3 class="text-lg font-semibold">Groups</h3>
+                    <button id="groupEditBtn" type="button" class="ml-3 p-1 rounded hover:bg-gray-700" data-tip="Edit groups for the current zone.">
+                        <img id="groupEditIcon" src="assets/images/edit.svg" class="w-6 h-6 brightness-0 saturate-100 invert-[1.0]" alt="Edit icon" />
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    <!-- Groups buttons -->
+    <div class="container-lg mb-20">
+        <div class="container mx-auto flex items-center justify-center lg:justify-start">
+                <!-- hidden value for compatibility -->
+                <input type="hidden" id="groupSelect" value="">
+
+                <!-- Group buttons container -->
+                <div id="groupButtonsContainer" class="flex items-center gap-4">
+                    <!-- Group buttons will be dynamically added here -->
+                </div>
+
+                <button id="addNewGroup" class="ml-4 px-1 py-1 rounded-md bg-[#31393d] hover:bg-[#707b81] text-white text-sm font-medium border border-gray-400 flex items-center justify-center" data-tip="Tip: Create your first group to start organizing devices in this zone.">
+                    <i id="addGroupPlus" class="fas fa-plus text-xl"></i>
+                </button>
+                <!-- Tip bubble shown when no zone exists -->
+                 <span id="addGroupWarning" class="text-sm text-gray-400 ml-3 hidden">A zone is required before creating a group. Please create a zone first.</span>
+                <!-- <div id="addGroupWarning" class="tip-bubble hidden ml-3" role="status" aria-live="polite"> -->
+                    <!-- <span class="tip-text">Create your first group to start organizing devices in this zone.</span> -->
+                <!-- </div> -->
+        </div>
+    </div>
+
+
+        <!-- Devices / Locations -->
+    <div class="container-lg" id="devicesSection">
+        <div class="container mx-auto flex items-center justify-between mb-8">
+            <div class="flex items-center space-x-4 mr-12">
+                <h2 class="text-lg font-semibold">Devices</h2>
+                <button id="refreshStatus" class="flex items-center text-sm text-gray-300 hover:text-gray-200">
+                    <svg class="w-4 h-4 mr-2 text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.581M4.582 9a8 8 0 0114.836-2.002M19.418 15A8 8 0 014.582 9" />
+                    </svg>
+                    <span>Refresh Status</span>
+                </button>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <button class="bg-[#db2a6a] hover:bg-[#c9225e] text-white rounded-xl px-4 py-2 text-sm">+ New Device Card</button>
+                <button class="border border-gray-300 text-gray-200 rounded-xl bg-[#30383d] px-4 py-2 text-sm">Group Controls</button>
+            </div>
+        </div>
+        <div class="mx-auto" id="devicesContainer">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-9" id="devicesGrid">
+                    <!-- Devices will be dynamically loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Device Modal -->
+    <div id="addDeviceModal" class="fixed inset-0 bg-black bg-opacity-75 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-gray-800 border-gray-600">
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-white">Add WLED Device</h3>
+                    <button type="button" class="text-gray-400 hover:text-gray-300" onclick="closeModal('addDeviceModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="addDeviceForm" method="POST">
+                    <div class="mb-4">
+                        <label for="deviceName" class="block text-sm font-medium text-gray-300 mb-2">Device Name</label>
+                        <input type="text" class="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" id="deviceName" name="name" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="deviceIP" class="block text-sm font-medium text-gray-300 mb-2">IP Address</label>
+                        <input type="text" class="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" id="deviceIP" name="ip_address" required placeholder="192.168.1.100">
+                    </div>
+                    <div class="mb-6">
+                        <label for="deviceDescription" class="block text-sm font-medium text-gray-300 mb-2">Description (Optional)</label>
+                        <textarea class="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" id="deviceDescription" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-md transition-colors duration-200" onclick="closeModal('addDeviceModal')">Cancel</button>
+                        <button type="submit" class="bg-cyan-500 hover:bg-cyan-600 text-white px-4 py-2 rounded-md transition-colors duration-200">Add Device</button>
+                    </div>
+                </form>
+        </div>
+    </div>
+
+    <!-- Control Panel Modal -->
+    <div id="controlPanelModal" class="fixed inset-0 z-50 hidden">
+        <!-- Backdrop -->
+        <div class="modal-backdrop absolute inset-0 bg-black bg-opacity-75" id="controlPanelBackdrop"></div>
+        
+        <!-- Modal Content -->
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto relative">
+                
+                <!-- Close Button -->
+                <button id="closeControlPanel" class="absolute top-4 right-4 text-gray-400 hover:text-white z-10">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+
+                <!-- Header Tabs -->
+                <div class="flex items-center gap-2 p-4 border-b border-gray-800">
+                    <button class="p-3 hover:bg-gray-800 rounded-lg transition-colors" title="Power">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"/>
+                        </svg>
+                    </button>
+                    <button class="p-3 hover:bg-gray-800 rounded-lg transition-colors" title="Timer">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </button>
+                    <button class="p-3 hover:bg-gray-800 rounded-lg transition-colors" title="Sync">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
+                    <button class="p-3 hover:bg-gray-800 rounded-lg transition-colors" title="Peek">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                    </button>
+                    <button class="p-3 hover:bg-gray-800 rounded-lg transition-colors" title="Info">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </button>
+                    <button class="p-3 hover:bg-gray-800 rounded-lg transition-colors" title="Config">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </button>
+                    <div class="ml-auto">
+                        <span id="controlPanelDeviceName" class="text-white font-semibold">Device Control Panel</span>
+                    </div>
+                </div>
+
+                <!-- Main Content Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
+                    
+                    <!-- Left Panel - Color Picker -->
+                    <div class="space-y-4">
+                        <div class="flex justify-center">
+                            <div class="color-wheel" id="colorWheel">
+                                <div class="color-selector" id="colorSelector" style="top: 50%; left: 85%; transform: translate(-50%, -50%);"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <input type="range" class="w-full" min="0" max="100" value="50" id="saturationSlider">
+                            <input type="range" class="w-full" min="0" max="100" value="50" id="brightnessSliderModal">
+                        </div>
+                        
+                        <div class="flex gap-2 justify-center flex-wrap">
+                            <button class="w-8 h-8 rounded-full bg-red-500 border-2 border-gray-700 color-preset" data-color="#ff0000"></button>
+                            <button class="w-8 h-8 rounded-full bg-orange-500 border-2 border-gray-700 color-preset" data-color="#ff8800"></button>
+                            <button class="w-8 h-8 rounded-full bg-yellow-400 border-2 border-gray-700 color-preset" data-color="#ffff00"></button>
+                            <button class="w-8 h-8 rounded-full bg-yellow-200 border-2 border-gray-700 color-preset" data-color="#ffff88"></button>
+                            <button class="w-8 h-8 rounded-full bg-white border-2 border-gray-700 color-preset" data-color="#ffffff"></button>
+                            <button class="w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 color-preset" data-color="#333333"></button>
+                        </div>
+                        
+                        <div class="flex gap-2 justify-center flex-wrap">
+                            <button class="w-8 h-8 rounded-full bg-fuchsia-500 border-2 border-gray-700 color-preset" data-color="#ff00ff"></button>
+                            <button class="w-8 h-8 rounded-full bg-blue-600 border-2 border-gray-700 color-preset" data-color="#0066ff"></button>
+                            <button class="w-8 h-8 rounded-full bg-cyan-400 border-2 border-gray-700 color-preset" data-color="#00ffff"></button>
+                            <button class="w-8 h-8 rounded-full bg-green-500 border-2 border-gray-700 color-preset" data-color="#00ff00"></button>
+                            <button class="w-8 h-8 rounded-full bg-blue-400 border-2 border-gray-700 ring-2 ring-white color-preset" data-color="#4488ff"></button>
+                        </div>
+                        
+                        <div class="flex gap-2 justify-center">
+                            <button class="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg">
+                                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                                </svg>
+                            </button>
+                            <button class="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg">
+                                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <div class="bg-gray-800 rounded-lg p-3">
+                            <div class="flex items-center gap-2 text-gray-300 text-sm mb-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                                </svg>
+                                <span>Color palette</span>
+                            </div>
+                            <input type="text" placeholder="Search" class="w-full bg-gray-900 text-gray-300 rounded px-3 py-2 text-sm">
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <div class="bg-gray-800 rounded-lg p-2">
+                                <div class="text-gray-400 text-xs mb-1">Default</div>
+                                <div class="h-2 rounded bg-gradient-to-r from-red-600 via-purple-600 to-blue-600"></div>
+                            </div>
+                            <div class="bg-gray-800 rounded-lg p-2">
+                                <div class="text-gray-400 text-xs mb-1">* Color 1</div>
+                                <div class="h-2 rounded bg-gradient-to-r from-green-400 to-green-600"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Middle Panel - Effect Mode -->
+                    <div class="space-y-3">
+                        <h3 class="text-white text-lg font-semibold mb-4">Effect mode</h3>
+                        <input type="text" placeholder="Search" class="w-full bg-gray-800 text-gray-300 rounded-lg px-4 py-2">
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left transition-colors effect-btn" data-effect="solid">
+                            Solid
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="android">
+                            <span>Android</span>
+                            <span class="text-gray-500">🎨:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="aurora">
+                            <span>Aurora</span>
+                            <span class="text-gray-500">🎨:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between effect-btn" data-effect="blends">
+                            <span>Blends</span>
+                            <span class="text-gray-500">🎨:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="blink">
+                            <span>Blink</span>
+                            <span class="text-gray-500">🎨+:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="blink-rainbow">
+                            <span>Blink Rainbow</span>
+                            <span class="text-gray-500">🎨+:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="blurz">
+                            <span>Blurz</span>
+                            <span class="text-gray-500">🎨♪:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="bouncing-balls">
+                            <span>Bouncing Balls</span>
+                            <span class="text-gray-500">🎨:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="bpm">
+                            <span>Bpm</span>
+                            <span class="text-gray-500">🎨:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="breathe">
+                            <span>Breathe</span>
+                            <span class="text-gray-500">🎨+:</span>
+                        </button>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 text-left flex items-center justify-between transition-colors effect-btn" data-effect="candle">
+                            <span>Candle</span>
+                            <span class="text-gray-500">🎨+:</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Right Panel - Segments -->
+                    <div class="space-y-4">
+                        <h3 class="text-white text-lg font-semibold">Segments</h3>
+                        
+                        <div class="bg-gray-800 rounded-lg p-3 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" checked class="w-5 h-5">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span class="text-white">Segment 0</span>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        
+                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white rounded-lg px-4 py-3 flex items-center gap-2 transition-colors">
+                            <input type="checkbox" checked class="w-5 h-5">
+                            <span>+ Add segment</span>
+                        </button>
+                        
+                        <div class="bg-gray-800 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-gray-400 text-sm">Transition:</span>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" value="0.7" step="0.1" class="bg-gray-900 text-white rounded px-2 py-1 w-16 text-center">
+                                    <span class="text-gray-400 text-sm">s</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-800 rounded-lg p-4 space-y-3">
+                            <h4 class="text-white font-semibold">Quick Actions</h4>
+                            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 transition-colors" id="applyEffectBtn">
+                                Apply Effect
+                            </button>
+                            <button class="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 transition-colors" id="savePresetBtn">
+                                Save Preset
+                            </button>
+                            <button class="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-lg px-4 py-2 transition-colors" id="randomEffectBtn">
+                                Random Effect
+                            </button>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config: allow build-time override (window.__API_BASE__) or auto-detect -->
+    <script>
+      // local dev default: backend is at 127.0.0.1:5000
+      if (typeof window.__API_BASE__ === 'undefined') {
+          if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+              window.__API_BASE__ = 'http://127.0.0.1:5000';
+          } else {
+              // production (Vercel) or single-origin: use relative paths
+              window.__API_BASE__ = '';
+          }
+      }
+    </script>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/zones.js"></script>
+    <script src="../js/groups.js"></script>
+    <script src="../js/control-panel.js"></script>
+    <script src="../js/devices.js"></script>
+    <script src="../js/main.js"></script> 
+
+</body>
+</html>

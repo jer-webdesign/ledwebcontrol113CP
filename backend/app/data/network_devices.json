@@ -1,0 +1,61 @@
+{
+    "zones": [
+        {
+            "zone_id": 0,
+            "zone_name": "Unassigned",
+            "zone_description": "Devices not yet assigned to a location",
+            "groups": [
+                {
+                    "group_description": "Unassigned devices",
+                    "group_id": 0,
+                    "group_name": "Unassigned",
+                    "location": [
+                        {
+                            "location_description": "Unassigned devices",
+                            "location_id": 0,
+                            "location_name": "Unassigned",
+                            "device": [
+                                {
+                                    "device_id": 1,
+                                    "device_name": "WLED",
+                                    "device_description": "",
+                                    "device_hostname": "WLED",
+                                    "device_ip": "10.0.0.140",
+                                    "device_mac": "206ef16df478",
+                                    "device_current_color": null,
+                                    "device_segment_colors": []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "zone_id": 1,
+            "zone_name": "Home1",
+            "zone_description": "Home1",
+            "groups": [
+                {
+                    "group_id": 2,
+                    "group_name": "Bedroom2",
+                    "group_description": "",
+                    "location": [
+                        {
+                            "location_description": "",
+                            "location_id": 1,
+                            "location_name": "Bedroom2 Location",
+                            "device": []
+                        },
+                        {
+                            "location_description": "",
+                            "location_id": 2,
+                            "location_name": "Bedroom2 Location",
+                            "device": []
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
